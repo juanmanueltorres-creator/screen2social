@@ -38,7 +38,7 @@ def test_process_recording_creates_complete_social_package(synthetic_video, tmp_
         "thumbnail",
         "post_template",
     ]
-    assert metadata["pipeline_version"] == "0.2.0"
+    assert metadata["pipeline_version"] == "0.3.0"
 
 
 def test_process_recording_removes_only_new_partial_package_on_domain_failure(

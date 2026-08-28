@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "screen2social"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first automation from screen recordings to social-ready video packages."
 readme = "README.md"
 requires-python = ">=3.11"
