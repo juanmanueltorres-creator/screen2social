@@ -14,7 +14,7 @@ def test_parser_uses_screen2social_program_name():
 
 
 def test_version_is_exposed():
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.3.0"
 
 
 def test_process_command_parses_input_and_ready_dir():
