@@ -26,7 +26,7 @@ def test_process_recording_creates_complete_v01_package(synthetic_video, tmp_pat
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert metadata["output_dimensions"] == {"width": 1920, "height": 1080}
-    assert metadata["pipeline_version"] == "0.1.0"
+    assert metadata["pipeline_version"] == "0.2.0"
 
 
 def test_process_recording_removes_only_new_partial_package_on_domain_failure(
