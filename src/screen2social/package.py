@@ -14,6 +14,7 @@ from screen2social.media import (
 )
 from screen2social.metadata import build_metadata, write_metadata
 from screen2social.paths import create_package_dir
+from screen2social.social import build_post_markdown, write_post
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class ProcessResult:
     video_path: Path
     thumbnail_path: Path
     metadata_path: Path
+    post_path: Path
 
 
 def process_recording(
@@ -44,6 +46,7 @@ def process_recording(
     video_path = package_dir / "linkedin.mp4"
     thumbnail_path = package_dir / "thumbnail.png"
     metadata_path = package_dir / "metadata.json"
+    post_path = package_dir / "post.md"
 
     try:
         transcode_linkedin(source, video_path, active_toolchain)
@@ -63,6 +66,8 @@ def process_recording(
             warnings=[],
         )
         write_metadata(metadata_path, metadata)
+        post = build_post_markdown(source)
+        write_post(post_path, post)
     except Screen2SocialError:
         shutil.rmtree(package_dir, ignore_errors=True)
         raise
@@ -75,4 +80,5 @@ def process_recording(
         video_path=video_path,
         thumbnail_path=thumbnail_path,
         metadata_path=metadata_path,
+        post_path=post_path,
     )
