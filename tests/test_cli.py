@@ -18,3 +18,9 @@ def test_process_command_parses_input_and_ready_dir():
     assert args.command == "process"
     assert args.input == "demo.mkv"
     assert args.ready_dir == "out"
+
+
+def test_doctor_command_is_available():
+    parser = build_parser()
+    args = parser.parse_args(["doctor"])
+    assert args.command == "doctor"
