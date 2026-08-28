@@ -33,6 +33,11 @@ def test_process_recording_creates_complete_social_package(synthetic_video, tmp_
 
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert metadata["output_dimensions"] == {"width": 1920, "height": 1080}
+    assert metadata["steps"] == [
+        "linkedin_transcode",
+        "thumbnail",
+        "post_template",
+    ]
     assert metadata["pipeline_version"] == "0.2.0"
 
 
