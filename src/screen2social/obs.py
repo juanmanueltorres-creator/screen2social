@@ -10,9 +10,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from screen2social.errors import (
+    ObsAlreadyRecordingError,
     ObsAuthError,
     ObsConfigError,
     ObsConnectionError,
+    ObsNotRecordingError,
     ObsRequestError,
 )
 
@@ -125,8 +127,15 @@ def _active_config(config: ObsConfig | None) -> ObsConfig:
 
 
 def _require_ok(response, request_type: str) -> None:
-    if not response.ok():
-        raise ObsRequestError(f"OBS request failed: {request_type}")
+    if response.ok():
+        return
+
+    code = getattr(response.requestStatus, "code", None)
+    if request_type == "StartRecord" and code == 500:
+        raise ObsAlreadyRecordingError("OBS is already recording")
+    if request_type == "StopRecord" and code == 501:
+        raise ObsNotRecordingError("OBS is not recording")
+    raise ObsRequestError(f"OBS request failed: {request_type}")
 
 
 def _require_bool(data: dict, key: str) -> bool:
@@ -165,3 +174,23 @@ def _normalize_record_status(response) -> ObsRecordStatus:
 def get_record_status(config: ObsConfig | None = None) -> ObsRecordStatus:
     response = _call_obs_request(_active_config(config), "GetRecordStatus")
     return _normalize_record_status(response)
+
+
+def start_recording(config: ObsConfig | None = None) -> None:
+    response = _call_obs_request(_active_config(config), "StartRecord")
+    _require_ok(response, "StartRecord")
+
+
+def stop_recording(config: ObsConfig | None = None) -> ObsStopResult:
+    response = _call_obs_request(_active_config(config), "StopRecord")
+    _require_ok(response, "StopRecord")
+
+    data = response.responseData
+    if not isinstance(data, dict):
+        raise ObsRequestError("OBS returned invalid StopRecord data")
+
+    output_path = data.get("outputPath")
+    if not isinstance(output_path, str) or not output_path.strip():
+        raise ObsRequestError("OBS returned an invalid recording path")
+
+    return ObsStopResult(output_path=Path(output_path))

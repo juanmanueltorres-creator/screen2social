@@ -259,3 +259,76 @@ def test_get_record_status_rejects_failed_obs_response(monkeypatch):
 
     with pytest.raises(ObsRequestError):
         get_record_status(_config())
+
+from pathlib import Path
+
+from screen2social.errors import ObsAlreadyRecordingError, ObsNotRecordingError
+from screen2social.obs import ObsStopResult, start_recording, stop_recording
+
+
+def test_start_recording_succeeds(monkeypatch):
+    client = FakeClient(response=FakeResponse(ok=True, data={}))
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    assert start_recording(_config()) is None
+    assert client.call_requests == [("StartRecord", 5.0)]
+
+
+def test_start_recording_maps_output_running_code(monkeypatch):
+    response = FakeResponse(ok=False, code=500, comment="Output is already running")
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    with pytest.raises(ObsAlreadyRecordingError) as exc:
+        start_recording(_config())
+
+    assert exc.value.code == "OBS_ALREADY_RECORDING"
+
+
+def test_start_recording_other_failure_stays_request_failed(monkeypatch):
+    response = FakeResponse(ok=False, code=600, comment="generic failure")
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    with pytest.raises(ObsRequestError):
+        start_recording(_config())
+
+
+def test_stop_recording_returns_output_path(monkeypatch):
+    expected = Path(r"C:\Users\Juan\Videos\demo.mkv")
+    response = FakeResponse(ok=True, data={"outputPath": str(expected)})
+    client = FakeClient(response=response)
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    result = stop_recording(_config())
+
+    assert result == ObsStopResult(output_path=expected)
+    assert client.call_requests == [("StopRecord", 5.0)]
+
+
+def test_stop_recording_maps_output_not_running_code(monkeypatch):
+    response = FakeResponse(ok=False, code=501, comment="Output is not running")
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    with pytest.raises(ObsNotRecordingError) as exc:
+        stop_recording(_config())
+
+    assert exc.value.code == "OBS_NOT_RECORDING"
+
+
+def test_stop_recording_other_failure_stays_request_failed(monkeypatch):
+    response = FakeResponse(ok=False, code=600, comment="generic failure")
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    with pytest.raises(ObsRequestError):
+        stop_recording(_config())
+
+
+@pytest.mark.parametrize("data", [None, {}, {"outputPath": ""}, {"outputPath": "   "}, {"outputPath": 123}])
+def test_stop_recording_rejects_invalid_output_path(monkeypatch, data):
+    monkeypatch.setattr(
+        obs_module,
+        "_make_client",
+        lambda config: FakeClient(response=FakeResponse(ok=True, data=data)),
+    )
+
+    with pytest.raises(ObsRequestError):
+        stop_recording(_config())
