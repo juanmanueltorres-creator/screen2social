@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Screen2Social local media
+inbox/*
+!inbox/.gitkeep
+ready/*
+!ready/.gitkeep
