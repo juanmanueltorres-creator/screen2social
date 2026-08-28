@@ -103,3 +103,31 @@ def transcode_linkedin(source: Path, output: Path, toolchain: Toolchain) -> None
         raise ProcessingError(
             completed.stderr.strip() or "ffmpeg failed while creating linkedin.mp4"
         )
+
+
+def choose_thumbnail_timestamp(duration_seconds: float) -> float:
+    if duration_seconds <= 0:
+        return 0.0
+    return min(5.0, duration_seconds / 2.0)
+
+
+def extract_thumbnail(
+    source: Path,
+    output: Path,
+    duration_seconds: float,
+    toolchain: Toolchain,
+) -> None:
+    timestamp = choose_thumbnail_timestamp(duration_seconds)
+    command = [
+        toolchain.ffmpeg,
+        "-hide_banner", "-loglevel", "error", "-n",
+        "-ss", f"{timestamp:.3f}",
+        "-i", str(source),
+        "-frames:v", "1",
+        str(output),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        raise ProcessingError(
+            completed.stderr.strip() or "ffmpeg failed while creating thumbnail.png"
+        )

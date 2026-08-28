@@ -78,3 +78,27 @@ def test_transcode_linkedin_generates_expected_video(synthetic_video, tmp_path):
     assert info.video_codec == "h264"
     assert info.audio_codec == "aac"
     assert (info.width, info.height) == (1920, 1080)
+
+
+def test_thumbnail_timestamp_uses_middle_for_short_video():
+    from screen2social.media import choose_thumbnail_timestamp
+
+    assert choose_thumbnail_timestamp(2.0) == 1.0
+
+
+def test_thumbnail_timestamp_caps_at_five_seconds():
+    from screen2social.media import choose_thumbnail_timestamp
+
+    assert choose_thumbnail_timestamp(30.0) == 5.0
+
+
+def test_extract_thumbnail_creates_png(synthetic_video, tmp_path):
+    from screen2social.media import extract_thumbnail
+
+    toolchain = discover_toolchain()
+    output = tmp_path / "thumbnail.png"
+
+    extract_thumbnail(synthetic_video, output, 2.0, toolchain)
+
+    assert output.is_file()
+    assert output.stat().st_size > 0
