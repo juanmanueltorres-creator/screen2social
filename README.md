@@ -1,10 +1,10 @@
 # screen2social
 
-Local-first automation pipeline that turns screen recordings into social-ready media packages using Python and FFmpeg — no paid APIs required.
+Local-first automation pipeline that turns screen recordings into social-ready media packages using Python, FFmpeg, and local OBS WebSocket control — no paid APIs required.
 
-## V0.1
+## Current capabilities
 
-Current workflow:
+### V0.1 — media package
 
 ```text
 recording
@@ -13,15 +13,24 @@ recording
   -> metadata.json
 ```
 
-The V0.1 pipeline is deliberately small: it processes an existing local recording. OBS control, subtitles, post copy, vertical presets, scheduling, and auto-publishing are later gates.
+### V0.2 — local OBS control
+
+```text
+screen2social status
+screen2social record
+screen2social stop
+```
+
+V0.2 controls recording only. `stop` returns the OBS file path; processing remains a separate explicit command. Real Windows/OBS validation is required before V0.2 is merged.
 
 ## Requirements
 
 - Python 3.11+
 - FFmpeg, with both `ffmpeg` and `ffprobe` available on `PATH`
-- Windows is the primary local environment for V0.1
+- OBS Studio 28+ for V0.2 OBS control
+- Windows is the primary local environment
 
-No API keys, cloud services, paid APIs, database, or social-media credentials are required.
+No social-network API keys, cloud services, paid APIs, database, or publishing credentials are required.
 
 ## Setup on Windows
 
@@ -32,7 +41,53 @@ python -m pip install -e ".[dev]"
 screen2social doctor
 ```
 
-A healthy setup reports the local paths for `ffmpeg` and `ffprobe`.
+A healthy media setup reports the local paths for `ffmpeg` and `ffprobe`.
+
+## OBS WebSocket setup on Windows
+
+Screen2Social V0.2 targets OBS Studio 28+ / obs-websocket 5.x.
+
+1. Open OBS Studio.
+2. Open **Tools -> WebSocket Server Settings**.
+3. Enable the WebSocket server.
+4. Keep the server local; the default Screen2Social endpoint is `localhost:4455`.
+5. Enable authentication and set a password.
+6. In the same PowerShell session where you run Screen2Social, set:
+
+```powershell
+$env:SCREEN2SOCIAL_OBS_PASSWORD = "<your OBS WebSocket password>"
+$env:SCREEN2SOCIAL_OBS_HOST = "localhost"
+$env:SCREEN2SOCIAL_OBS_PORT = "4455"
+$env:SCREEN2SOCIAL_OBS_TIMEOUT_SECONDS = "5.0"
+```
+
+`.env.example` is documentation only. Screen2Social does not automatically load `.env` files in V0.2, and the OBS password is never accepted as a CLI argument.
+
+### Capture smoke flow
+
+```powershell
+screen2social status
+screen2social record
+# record a few seconds in OBS
+screen2social status
+screen2social stop
+```
+
+`stop` prints:
+
+```text
+RECORDING: stopped
+FILE: C:\path\to\recording.mkv
+```
+
+Confirm that file exists, then process it separately:
+
+```powershell
+Test-Path "C:\path\to\recording.mkv"
+screen2social process "C:\path\to\recording.mkv"
+```
+
+Automatic stop-and-process chaining is intentionally deferred until this real OBS path flow is validated.
 
 ## Process a recording
 
@@ -61,6 +116,8 @@ screen2social process "C:\path\to\demo.mkv" --ready-dir "C:\content\ready"
 - An existing `ready/<slug>/` package is never overwritten; the command fails with `OUTPUT_EXISTS`.
 - Partial output created by a failed processing run is removed.
 - Local recordings under `inbox/` and generated assets under `ready/` are ignored by Git.
+- OBS WebSocket defaults to `localhost:4455`; Screen2Social does not configure public exposure, tunnels, or port forwarding.
+- OBS authentication is required by the V0.2 configuration contract.
 
 ## Output preset
 
@@ -84,17 +141,21 @@ screen2social process "C:\path\to\demo.mkv" --ready-dir "C:\content\ready"
 python -m pytest -v
 ```
 
-The integration suite generates temporary synthetic media with FFmpeg. Real recordings are not needed for tests and are not committed.
+The media integration suite generates temporary synthetic media with FFmpeg. OBS integration tests use fake clients; GitHub Actions does not require a real OBS instance.
 
 ## Roadmap
 
-- **V0.1** — media vertical slice: process, LinkedIn preset, thumbnail, metadata, doctor, CI
-- **V0.2** — OBS WebSocket status / record / stop
+- **V0.1** — media vertical slice: process, LinkedIn preset, thumbnail, metadata, doctor, CI ✅
+- **V0.2** — OBS WebSocket status / record / stop: implemented on feature branch; real Windows smoke pending
 - **V0.3** — `post.md`, templates, social package naming
 - **V0.4** — optional local transcription and silence editing
 - **V1** — validated GeoPlatform → Screen2Social → manual LinkedIn workflow
 - **V1.1+** — vertical presets only after real usage proves the need
 - **V2** — evaluate Postiz before building direct social-network integrations
+
+## Explicitly deferred from V0.2
+
+Automatic `stop -> process`, scene switching, pause/resume, streaming control, Whisper/subtitles, Auto-Editor, `post.md`, vertical presets, social APIs, browser automation, Postiz, schedulers, GUI, backend, and database remain outside V0.2.
 
 ## License
 
