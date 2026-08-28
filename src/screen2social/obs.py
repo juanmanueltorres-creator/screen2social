@@ -118,3 +118,50 @@ async def _call_obs_request_async(config: ObsConfig, request_type: str):
 
 def _call_obs_request(config: ObsConfig, request_type: str):
     return asyncio.run(_call_obs_request_async(config, request_type))
+
+
+def _active_config(config: ObsConfig | None) -> ObsConfig:
+    return config if config is not None else load_obs_config()
+
+
+def _require_ok(response, request_type: str) -> None:
+    if not response.ok():
+        raise ObsRequestError(f"OBS request failed: {request_type}")
+
+
+def _require_bool(data: dict, key: str) -> bool:
+    value = data.get(key)
+    if type(value) is not bool:
+        raise ObsRequestError(f"OBS response field is invalid: {key}")
+    return value
+
+
+def _require_non_negative_int(data: dict, key: str) -> int:
+    value = data.get(key)
+    if type(value) is not int or value < 0:
+        raise ObsRequestError(f"OBS response field is invalid: {key}")
+    return value
+
+
+def _normalize_record_status(response) -> ObsRecordStatus:
+    _require_ok(response, "GetRecordStatus")
+    data = response.responseData
+    if not isinstance(data, dict):
+        raise ObsRequestError("OBS returned invalid GetRecordStatus data")
+
+    timecode = data.get("outputTimecode")
+    if not isinstance(timecode, str):
+        raise ObsRequestError("OBS response field is invalid: outputTimecode")
+
+    return ObsRecordStatus(
+        active=_require_bool(data, "outputActive"),
+        paused=_require_bool(data, "outputPaused"),
+        timecode=timecode,
+        duration_ms=_require_non_negative_int(data, "outputDuration"),
+        bytes_written=_require_non_negative_int(data, "outputBytes"),
+    )
+
+
+def get_record_status(config: ObsConfig | None = None) -> ObsRecordStatus:
+    response = _call_obs_request(_active_config(config), "GetRecordStatus")
+    return _normalize_record_status(response)

@@ -168,3 +168,94 @@ def test_request_timeout_maps_to_request_failed(monkeypatch):
 
     assert exc.value.code == "OBS_REQUEST_FAILED"
     assert client.disconnect_calls == 1
+
+from screen2social.obs import ObsRecordStatus, get_record_status
+
+
+def test_get_record_status_normalizes_active_response(monkeypatch):
+    response = FakeResponse(
+        data={
+            "outputActive": True,
+            "outputPaused": False,
+            "outputTimecode": "00:01:23.456",
+            "outputDuration": 83456,
+            "outputBytes": 1234567,
+        }
+    )
+    client = FakeClient(response=response)
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    status = get_record_status(_config())
+
+    assert status == ObsRecordStatus(
+        active=True,
+        paused=False,
+        timecode="00:01:23.456",
+        duration_ms=83456,
+        bytes_written=1234567,
+    )
+
+
+def test_get_record_status_normalizes_stopped_response(monkeypatch):
+    response = FakeResponse(
+        data={
+            "outputActive": False,
+            "outputPaused": False,
+            "outputTimecode": "00:00:00.000",
+            "outputDuration": 0,
+            "outputBytes": 0,
+        }
+    )
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    assert get_record_status(_config()).active is False
+
+
+def test_get_record_status_normalizes_paused_response(monkeypatch):
+    response = FakeResponse(
+        data={
+            "outputActive": True,
+            "outputPaused": True,
+            "outputTimecode": "00:00:10.000",
+            "outputDuration": 10000,
+            "outputBytes": 2048,
+        }
+    )
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    status = get_record_status(_config())
+
+    assert status.active is True
+    assert status.paused is True
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,
+        {},
+        {"outputActive": 1, "outputPaused": False, "outputTimecode": "x", "outputDuration": 0, "outputBytes": 0},
+        {"outputActive": True, "outputPaused": False, "outputTimecode": 123, "outputDuration": 0, "outputBytes": 0},
+        {"outputActive": True, "outputPaused": False, "outputTimecode": "x", "outputDuration": -1, "outputBytes": 0},
+        {"outputActive": True, "outputPaused": False, "outputTimecode": "x", "outputDuration": 0, "outputBytes": -1},
+    ],
+)
+def test_get_record_status_rejects_malformed_data(monkeypatch, data):
+    monkeypatch.setattr(
+        obs_module,
+        "_make_client",
+        lambda config: FakeClient(response=FakeResponse(data=data)),
+    )
+
+    with pytest.raises(ObsRequestError) as exc:
+        get_record_status(_config())
+
+    assert exc.value.code == "OBS_REQUEST_FAILED"
+
+
+def test_get_record_status_rejects_failed_obs_response(monkeypatch):
+    response = FakeResponse(ok=False, code=500, comment="generic failure")
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: FakeClient(response=response))
+
+    with pytest.raises(ObsRequestError):
+        get_record_status(_config())
