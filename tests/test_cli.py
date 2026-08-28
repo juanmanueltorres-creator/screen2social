@@ -26,6 +26,23 @@ def test_process_command_parses_input_and_ready_dir():
     assert args.ready_dir == "out"
 
 
+def test_process_prints_only_ready_package_path(monkeypatch, capsys, tmp_path):
+    package_dir = tmp_path / "ready" / "demo"
+
+    class Result:
+        pass
+
+    result = Result()
+    result.package_dir = package_dir
+
+    monkeypatch.setattr(
+        "screen2social.cli.process_recording", lambda *args, **kwargs: result
+    )
+
+    assert main(["process", "demo.mkv"]) == 0
+    assert capsys.readouterr().out == f"READY: {package_dir}\n"
+
+
 def test_doctor_command_is_available():
     parser = build_parser()
     args = parser.parse_args(["doctor"])
