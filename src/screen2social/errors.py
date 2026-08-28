@@ -26,3 +26,27 @@ class OutputExistsError(Screen2SocialError):
 
 class ProcessingError(Screen2SocialError):
     code = "PROCESSING_FAILED"
+
+
+class ObsConfigError(Screen2SocialError):
+    code = "OBS_CONFIG_ERROR"
+
+
+class ObsConnectionError(Screen2SocialError):
+    code = "OBS_CONNECTION_FAILED"
+
+
+class ObsAuthError(Screen2SocialError):
+    code = "OBS_AUTH_FAILED"
+
+
+class ObsAlreadyRecordingError(Screen2SocialError):
+    code = "OBS_ALREADY_RECORDING"
+
+
+class ObsNotRecordingError(Screen2SocialError):
+    code = "OBS_NOT_RECORDING"
+
+
+class ObsRequestError(Screen2SocialError):
+    code = "OBS_REQUEST_FAILED"
