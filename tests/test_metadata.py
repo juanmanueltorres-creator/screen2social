@@ -25,7 +25,11 @@ def test_metadata_contains_source_output_steps_and_version(tmp_path):
     assert payload["source_duration_seconds"] == 12.0
     assert payload["output_duration_seconds"] == 12.0
     assert payload["output_dimensions"] == {"width": 1920, "height": 1080}
-    assert payload["steps"] == ["linkedin_transcode", "thumbnail"]
+    assert payload["steps"] == [
+        "linkedin_transcode",
+        "thumbnail",
+        "post_template",
+    ]
     assert payload["pipeline_version"] == "0.1.0"
     assert payload["warnings"] == []
 
