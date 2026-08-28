@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import os
+
+import simpleobsws
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from screen2social.errors import ObsConfigError
+from screen2social.errors import (
+    ObsAuthError,
+    ObsConfigError,
+    ObsConnectionError,
+    ObsRequestError,
+)
 
 
 @dataclass(frozen=True)
@@ -64,3 +72,49 @@ def load_obs_config(environ: Mapping[str, str] | None = None) -> ObsConfig:
         password=password,
         timeout_seconds=timeout_seconds,
     )
+
+
+def _make_client(config: ObsConfig) -> simpleobsws.WebSocketClient:
+    return simpleobsws.WebSocketClient(
+        url=f"ws://{config.host}:{config.port}",
+        password=config.password,
+    )
+
+
+async def _call_obs_request_async(config: ObsConfig, request_type: str):
+    client = _make_client(config)
+    try:
+        try:
+            await client.connect()
+        except Exception as exc:
+            raise ObsConnectionError("Could not connect to OBS WebSocket") from exc
+
+        try:
+            identified = await client.wait_until_identified(
+                timeout=config.timeout_seconds
+            )
+        except Exception as exc:
+            raise ObsConnectionError("OBS WebSocket identification failed") from exc
+
+        if not identified:
+            close_code = getattr(getattr(client, "ws", None), "close_code", None)
+            if close_code == 4009:
+                raise ObsAuthError("OBS WebSocket authentication failed")
+            raise ObsConnectionError("OBS WebSocket identification timed out")
+
+        try:
+            return await client.call(
+                simpleobsws.Request(request_type),
+                timeout=config.timeout_seconds,
+            )
+        except Exception as exc:
+            raise ObsRequestError(f"OBS request failed: {request_type}") from exc
+    finally:
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+
+def _call_obs_request(config: ObsConfig, request_type: str):
+    return asyncio.run(_call_obs_request_async(config, request_type))

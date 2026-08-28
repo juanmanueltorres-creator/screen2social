@@ -47,3 +47,124 @@ def test_load_obs_config_rejects_invalid_values(environ):
 
     assert exc.value.code == "OBS_CONFIG_ERROR"
     assert "secret" not in str(exc.value)
+
+from types import SimpleNamespace
+
+import simpleobsws
+import screen2social.obs as obs_module
+from screen2social.errors import ObsAuthError, ObsConnectionError, ObsRequestError
+
+
+class FakeResponse:
+    def __init__(self, *, ok=True, code=100, comment=None, data=None):
+        self.requestStatus = SimpleNamespace(code=code, comment=comment)
+        self.responseData = data
+        self._ok = ok
+
+    def ok(self):
+        return self._ok
+
+
+class FakeClient:
+    def __init__(
+        self,
+        *,
+        identified=True,
+        close_code=None,
+        connect_error=None,
+        identify_error=None,
+        call_error=None,
+        response=None,
+    ):
+        self.identified = identified
+        self.ws = SimpleNamespace(close_code=close_code)
+        self.connect_error = connect_error
+        self.identify_error = identify_error
+        self.call_error = call_error
+        self.response = response or FakeResponse(data={})
+        self.connect_calls = 0
+        self.identify_calls = []
+        self.call_requests = []
+        self.disconnect_calls = 0
+
+    async def connect(self):
+        self.connect_calls += 1
+        if self.connect_error:
+            raise self.connect_error
+        return True
+
+    async def wait_until_identified(self, timeout):
+        self.identify_calls.append(timeout)
+        if self.identify_error:
+            raise self.identify_error
+        return self.identified
+
+    async def call(self, request, timeout):
+        self.call_requests.append((request.requestType, timeout))
+        if self.call_error:
+            raise self.call_error
+        return self.response
+
+    async def disconnect(self):
+        self.disconnect_calls += 1
+        return True
+
+
+def _config():
+    return ObsConfig("localhost", 4455, "secret", 5.0)
+
+
+def test_call_obs_request_connects_identifies_calls_and_disconnects(monkeypatch):
+    client = FakeClient(response=FakeResponse(data={"ok": True}))
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    response = obs_module._call_obs_request(_config(), "GetRecordStatus")
+
+    assert response.responseData == {"ok": True}
+    assert client.connect_calls == 1
+    assert client.identify_calls == [5.0]
+    assert client.call_requests == [("GetRecordStatus", 5.0)]
+    assert client.disconnect_calls == 1
+
+
+def test_connection_failure_maps_to_stable_error_and_disconnects(monkeypatch):
+    client = FakeClient(connect_error=OSError("connection refused"))
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    with pytest.raises(ObsConnectionError) as exc:
+        obs_module._call_obs_request(_config(), "GetRecordStatus")
+
+    assert exc.value.code == "OBS_CONNECTION_FAILED"
+    assert client.disconnect_calls == 1
+
+
+def test_identify_timeout_maps_to_connection_failed(monkeypatch):
+    client = FakeClient(identified=False)
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    with pytest.raises(ObsConnectionError):
+        obs_module._call_obs_request(_config(), "GetRecordStatus")
+
+    assert client.disconnect_calls == 1
+
+
+def test_auth_close_code_4009_maps_to_auth_failed(monkeypatch):
+    client = FakeClient(identified=False, close_code=4009)
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    with pytest.raises(ObsAuthError) as exc:
+        obs_module._call_obs_request(_config(), "GetRecordStatus")
+
+    assert exc.value.code == "OBS_AUTH_FAILED"
+    assert client.disconnect_calls == 1
+
+
+def test_request_timeout_maps_to_request_failed(monkeypatch):
+    client = FakeClient(call_error=simpleobsws.MessageTimeout("timeout"))
+    monkeypatch.setattr(obs_module, "_make_client", lambda config: client)
+
+    with pytest.raises(ObsRequestError) as exc:
+        obs_module._call_obs_request(_config(), "GetRecordStatus")
+
+    assert exc.value.code == "OBS_REQUEST_FAILED"
+    assert client.disconnect_calls == 1
