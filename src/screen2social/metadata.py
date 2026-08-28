@@ -23,7 +23,7 @@ def build_metadata(
         "output_dimensions": {"width": output_info.width, "height": output_info.height},
         "source_codecs": {"video": source_info.video_codec, "audio": source_info.audio_codec},
         "output_codecs": {"video": output_info.video_codec, "audio": output_info.audio_codec},
-        "steps": ["linkedin_transcode", "thumbnail"],
+        "steps": ["linkedin_transcode", "thumbnail", "post_template"],
         "warnings": list(warnings),
         "pipeline_version": pipeline_version,
     }
