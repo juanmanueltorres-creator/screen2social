@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Juan Manuel Torres" }]
-dependencies = []
+dependencies = ["simpleobsws==1.4.3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
