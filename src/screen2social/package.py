@@ -88,6 +88,7 @@ def process_recording(
             processed_at=datetime.now(timezone.utc),
             pipeline_version=__version__,
             warnings=[],
+            transcription_performed=transcription_result is not None,
         )
         write_metadata(metadata_path, metadata)
         post = build_post_markdown(source)
