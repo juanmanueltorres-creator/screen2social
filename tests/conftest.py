@@ -24,3 +24,21 @@ def synthetic_video(tmp_path: Path) -> Path:
     ]
     subprocess.run(command, check=True)
     return output
+
+
+@pytest.fixture
+def synthetic_video_no_audio(tmp_path: Path) -> Path:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        pytest.skip("ffmpeg is required for media integration tests")
+
+    output = tmp_path / "silent-source.mkv"
+    command = [
+        ffmpeg,
+        "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        str(output),
+    ]
+    subprocess.run(command, check=True)
+    return output
