@@ -27,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     process_parser.add_argument("input")
     process_parser.add_argument("--ready-dir", default="ready")
+    process_parser.add_argument(
+        "--transcribe",
+        action="store_true",
+        help="Generate local TXT and SRT transcription with whisper.cpp",
+    )
     return parser
 
 
@@ -87,6 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = process_recording(
                 Path(args.input),
                 ready_root=Path(args.ready_dir),
+                transcribe=args.transcribe,
             )
         except Screen2SocialError as exc:
             print(f"{exc.code}: {exc}")
