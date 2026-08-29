@@ -5,7 +5,14 @@ from pathlib import Path
 from screen2social import __version__
 from screen2social.errors import Screen2SocialError
 from screen2social.media import discover_toolchain
-from screen2social.obs import get_record_status, start_recording, stop_recording
+from screen2social.obs import (
+    get_record_status,
+    load_obs_scene_names,
+    set_current_program_scene,
+    start_recording,
+    stop_recording,
+    toggle_program_scene,
+)
 from screen2social.package import process_recording
 
 
@@ -21,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status", help="Show OBS recording status")
     subparsers.add_parser("record", help="Start OBS recording")
     subparsers.add_parser("stop", help="Stop OBS recording and show the saved file")
+
+    scene_parser = subparsers.add_parser(
+        "scene", help="Switch between configured OBS production scenes"
+    )
+    scene_parser.add_argument("target", choices=("studio", "capture", "toggle"))
 
     process_parser = subparsers.add_parser(
         "process", help="Process an existing local recording"
@@ -86,6 +98,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         return _run_obs_command(stop)
+
+    if args.command == "scene":
+        def switch_scene():
+            scene_names = load_obs_scene_names()
+            if args.target == "studio":
+                target = scene_names.studio
+                set_current_program_scene(target)
+            elif args.target == "capture":
+                target = scene_names.capture
+                set_current_program_scene(target)
+            else:
+                target = toggle_program_scene(scene_names)
+            print(f"SCENE: {target}")
+            return 0
+
+        return _run_obs_command(switch_scene)
 
     if args.command == "process":
         try:
