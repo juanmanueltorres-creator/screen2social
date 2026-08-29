@@ -45,6 +45,7 @@ def test_process_recording_creates_complete_social_package(synthetic_video, tmp_
         "thumbnail",
         "post_template",
     ]
+    assert "transcription" not in metadata
     assert metadata["pipeline_version"] == "0.3.0"
 
 
@@ -134,6 +135,20 @@ def test_process_recording_with_transcription_returns_six_artifacts(
         "post.md",
         "transcript.txt",
         "transcript.srt",
+    }
+
+    metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+    assert metadata["steps"] == [
+        "linkedin_transcode",
+        "thumbnail",
+        "post_template",
+        "transcription",
+    ]
+    assert metadata["transcription"] == {
+        "engine": "whisper.cpp",
+        "language": "auto",
+        "text_file": "transcript.txt",
+        "subtitle_file": "transcript.srt",
     }
 
 
