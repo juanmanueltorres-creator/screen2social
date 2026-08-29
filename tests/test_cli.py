@@ -4,7 +4,7 @@ import pytest
 
 from screen2social import __version__
 from screen2social.cli import build_parser, main
-from screen2social.errors import ObsConnectionError
+from screen2social.errors import ObsConnectionError, TranscriptionFailedError
 from screen2social.obs import ObsRecordStatus, ObsStopResult
 
 
@@ -26,6 +26,16 @@ def test_process_command_parses_input_and_ready_dir():
     assert args.ready_dir == "out"
 
 
+def test_process_command_defaults_to_no_transcription():
+    args = build_parser().parse_args(["process", "demo.mkv"])
+    assert args.transcribe is False
+
+
+def test_process_command_accepts_transcription_flag():
+    args = build_parser().parse_args(["process", "demo.mkv", "--transcribe"])
+    assert args.transcribe is True
+
+
 def test_process_prints_only_ready_package_path(monkeypatch, capsys, tmp_path):
     package_dir = tmp_path / "ready" / "demo"
 
@@ -41,6 +51,57 @@ def test_process_prints_only_ready_package_path(monkeypatch, capsys, tmp_path):
 
     assert main(["process", "demo.mkv"]) == 0
     assert capsys.readouterr().out == f"READY: {package_dir}\n"
+
+
+def test_process_forwards_transcription_flag(monkeypatch, tmp_path):
+    captured = {}
+    package_dir = tmp_path / "ready" / "demo"
+
+    class Result:
+        pass
+
+    result = Result()
+    result.package_dir = package_dir
+
+    def fake_process(*args, **kwargs):
+        captured.update(kwargs)
+        return result
+
+    monkeypatch.setattr("screen2social.cli.process_recording", fake_process)
+
+    assert main(["process", "demo.mkv", "--transcribe"]) == 0
+    assert captured["transcribe"] is True
+
+
+def test_process_transcription_success_still_prints_only_ready_line(
+    monkeypatch, capsys, tmp_path
+):
+    package_dir = tmp_path / "ready" / "demo"
+
+    class Result:
+        pass
+
+    result = Result()
+    result.package_dir = package_dir
+    monkeypatch.setattr(
+        "screen2social.cli.process_recording",
+        lambda *args, **kwargs: result,
+    )
+
+    assert main(["process", "demo.mkv", "--transcribe"]) == 0
+    assert capsys.readouterr().out == f"READY: {package_dir}\n"
+
+
+def test_process_transcription_error_uses_stable_code(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "screen2social.cli.process_recording",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            TranscriptionFailedError("decode failed")
+        ),
+    )
+
+    assert main(["process", "demo.mkv", "--transcribe"]) == 1
+    assert capsys.readouterr().out == "TRANSCRIPTION_FAILED: decode failed\n"
 
 
 def test_doctor_command_is_available():
