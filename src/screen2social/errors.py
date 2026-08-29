@@ -50,3 +50,19 @@ class ObsNotRecordingError(Screen2SocialError):
 
 class ObsRequestError(Screen2SocialError):
     code = "OBS_REQUEST_FAILED"
+
+
+class WhisperCliNotFoundError(Screen2SocialError):
+    code = "WHISPER_CLI_NOT_FOUND"
+
+
+class WhisperModelNotFoundError(Screen2SocialError):
+    code = "WHISPER_MODEL_NOT_FOUND"
+
+
+class TranscriptionNoAudioError(Screen2SocialError):
+    code = "TRANSCRIPTION_NO_AUDIO"
+
+
+class TranscriptionFailedError(Screen2SocialError):
+    code = "TRANSCRIPTION_FAILED"
