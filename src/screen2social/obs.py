@@ -28,6 +28,12 @@ class ObsConfig:
 
 
 @dataclass(frozen=True)
+class ObsSceneNames:
+    studio: str
+    capture: str
+
+
+@dataclass(frozen=True)
 class ObsRecordStatus:
     active: bool
     paused: bool
@@ -76,6 +82,21 @@ def load_obs_config(environ: Mapping[str, str] | None = None) -> ObsConfig:
     )
 
 
+def load_obs_scene_names(
+    environ: Mapping[str, str] | None = None,
+) -> ObsSceneNames:
+    values = os.environ if environ is None else environ
+    studio = values.get("SCREEN2SOCIAL_OBS_SCENE_STUDIO", "").strip()
+    capture = values.get("SCREEN2SOCIAL_OBS_SCENE_CAPTURE", "").strip()
+
+    if not studio:
+        raise ObsConfigError("SCREEN2SOCIAL_OBS_SCENE_STUDIO is required")
+    if not capture:
+        raise ObsConfigError("SCREEN2SOCIAL_OBS_SCENE_CAPTURE is required")
+
+    return ObsSceneNames(studio=studio, capture=capture)
+
+
 def _make_client(config: ObsConfig) -> simpleobsws.WebSocketClient:
     return simpleobsws.WebSocketClient(
         url=f"ws://{config.host}:{config.port}",
@@ -83,7 +104,11 @@ def _make_client(config: ObsConfig) -> simpleobsws.WebSocketClient:
     )
 
 
-async def _call_obs_request_async(config: ObsConfig, request_type: str):
+async def _call_obs_request_async(
+    config: ObsConfig,
+    request_type: str,
+    request_data: dict | None = None,
+):
     client = _make_client(config)
     try:
         try:
@@ -106,7 +131,7 @@ async def _call_obs_request_async(config: ObsConfig, request_type: str):
 
         try:
             return await client.call(
-                simpleobsws.Request(request_type),
+                simpleobsws.Request(request_type, request_data),
                 timeout=config.timeout_seconds,
             )
         except Exception as exc:
@@ -118,8 +143,12 @@ async def _call_obs_request_async(config: ObsConfig, request_type: str):
             pass
 
 
-def _call_obs_request(config: ObsConfig, request_type: str):
-    return asyncio.run(_call_obs_request_async(config, request_type))
+def _call_obs_request(
+    config: ObsConfig,
+    request_type: str,
+    request_data: dict | None = None,
+):
+    return asyncio.run(_call_obs_request_async(config, request_type, request_data))
 
 
 def _active_config(config: ObsConfig | None) -> ObsConfig:
@@ -174,6 +203,44 @@ def _normalize_record_status(response) -> ObsRecordStatus:
 def get_record_status(config: ObsConfig | None = None) -> ObsRecordStatus:
     response = _call_obs_request(_active_config(config), "GetRecordStatus")
     return _normalize_record_status(response)
+
+
+def get_current_program_scene(config: ObsConfig | None = None) -> str:
+    response = _call_obs_request(_active_config(config), "GetCurrentProgramScene")
+    _require_ok(response, "GetCurrentProgramScene")
+
+    data = response.responseData
+    if not isinstance(data, dict):
+        raise ObsRequestError("OBS returned invalid GetCurrentProgramScene data")
+
+    scene_name = data.get("currentProgramSceneName")
+    if not isinstance(scene_name, str) or not scene_name.strip():
+        raise ObsRequestError(
+            "OBS response field is invalid: currentProgramSceneName"
+        )
+    return scene_name
+
+
+def set_current_program_scene(
+    scene_name: str,
+    config: ObsConfig | None = None,
+) -> None:
+    response = _call_obs_request(
+        _active_config(config),
+        "SetCurrentProgramScene",
+        {"sceneName": scene_name},
+    )
+    _require_ok(response, "SetCurrentProgramScene")
+
+
+def toggle_program_scene(
+    scene_names: ObsSceneNames,
+    config: ObsConfig | None = None,
+) -> str:
+    current = get_current_program_scene(config)
+    target = scene_names.capture if current == scene_names.studio else scene_names.studio
+    set_current_program_scene(target, config)
+    return target
 
 
 def start_recording(config: ObsConfig | None = None) -> None:
