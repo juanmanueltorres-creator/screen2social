@@ -15,6 +15,12 @@ from screen2social.media import (
 from screen2social.metadata import build_metadata, write_metadata
 from screen2social.paths import create_package_dir
 from screen2social.social import build_post_markdown, write_post
+from screen2social.transcription import (
+    TranscriptionResult,
+    discover_transcription_toolchain,
+    ensure_audio_available,
+    transcribe_recording,
+)
 
 
 @dataclass(frozen=True)
@@ -24,6 +30,8 @@ class ProcessResult:
     thumbnail_path: Path
     metadata_path: Path
     post_path: Path
+    transcript_path: Path | None = None
+    subtitle_path: Path | None = None
 
 
 def process_recording(
@@ -31,10 +39,16 @@ def process_recording(
     *,
     ready_root: Path = Path("ready"),
     toolchain: Toolchain | None = None,
+    transcribe: bool = False,
 ) -> ProcessResult:
     source = source.expanduser().resolve()
     active_toolchain = toolchain or discover_toolchain()
     source_info = probe_media(source, active_toolchain)
+
+    transcription_toolchain = None
+    if transcribe:
+        ensure_audio_available(source_info.audio_codec)
+        transcription_toolchain = discover_transcription_toolchain()
 
     try:
         package_dir = create_package_dir(source, ready_root)
@@ -48,6 +62,8 @@ def process_recording(
     metadata_path = package_dir / "metadata.json"
     post_path = package_dir / "post.md"
 
+    transcription_result: TranscriptionResult | None = None
+
     try:
         transcode_linkedin(source, video_path, active_toolchain)
         output_info = probe_media(video_path, active_toolchain)
@@ -57,6 +73,14 @@ def process_recording(
             output_info.duration_seconds,
             active_toolchain,
         )
+        if transcribe:
+            assert transcription_toolchain is not None
+            transcription_result = transcribe_recording(
+                source,
+                package_dir,
+                active_toolchain,
+                transcription_toolchain,
+            )
         metadata = build_metadata(
             source,
             source_info,
@@ -81,4 +105,12 @@ def process_recording(
         thumbnail_path=thumbnail_path,
         metadata_path=metadata_path,
         post_path=post_path,
+        transcript_path=(
+            transcription_result.text_path if transcription_result is not None else None
+        ),
+        subtitle_path=(
+            transcription_result.subtitle_path
+            if transcription_result is not None
+            else None
+        ),
     )
