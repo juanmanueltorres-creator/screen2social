@@ -1,31 +1,66 @@
-# screen2social
+# Screen2Social
 
-Local-first automation pipeline that turns screen recordings into social-ready media packages using Python, FFmpeg, local OBS WebSocket control, and optional local transcription — no paid APIs required.
+> **Record in OBS. Turn the recording into a ready-to-review social package — locally.**
 
-## Current capabilities
+Screen2Social connects local OBS capture with a deterministic FFmpeg pipeline that prepares a screen recording for manual social publishing.
 
-### V0.1 — media package ✅
+It can control recording and configured OBS scenes, render a LinkedIn-ready video, create a thumbnail and metadata, generate an editable `post.md`, and optionally add local TXT/SRT transcription through `whisper.cpp`.
+
+No source recording is uploaded by Screen2Social, and nothing is published automatically.
+
+> **Automate the boring media plumbing. Keep the publishing decision human.**
+
+---
+
+## Typical workflow
 
 ```text
-recording
-  -> linkedin.mp4
-  -> thumbnail.png
-  -> metadata.json
+OBS
+ ↓
+recording.mkv
+ ↓
+screen2social process
+ ↓
+ready/demo/
+├── linkedin.mp4
+├── thumbnail.png
+├── metadata.json
+├── post.md
+└── transcript.*   optional
+ ↓
+human review
+ ↓
+manual publish
 ```
 
-### V0.2 — local OBS control ✅
+The capture and processing steps stay explicit. Stopping an OBS recording does not silently trigger transcoding or publication.
 
-```text
+---
+
+## What it does
+
+### Local OBS control
+
+```powershell
 screen2social status
 screen2social record
+screen2social scene capture
+screen2social scene studio
+screen2social scene toggle
 screen2social stop
 ```
 
-V0.2 controls recording only. `stop` returns the OBS file path; processing remains a separate explicit command. The OBS WebSocket flow was validated on real Windows + OBS, including authentication, recording, status, stop, the returned MKV path, and end-to-end processing.
+OBS control targets the local OBS WebSocket interface. Recording status, start/stop and configured scene switching remain separate commands so the operator can see exactly what action is being requested.
 
-### V0.3 — deterministic social package ✅
+### Deterministic media package
 
-`screen2social process` adds deterministic, editable `post.md` to the media package:
+Process an existing recording:
+
+```powershell
+screen2social process "C:\path\to\demo.mkv"
+```
+
+A successful run creates:
 
 ```text
 ready/demo/
@@ -35,54 +70,77 @@ ready/demo/
 └── post.md
 ```
 
-`post.md` contains:
+`linkedin.mp4` uses a 1920×1080 H.264/AAC-friendly social preset while preserving the source aspect ratio with padding where necessary.
 
-- the human-readable source filename as the title;
-- a manual post-body placeholder;
-- the canonical `linkedin.mp4` and `thumbnail.png` asset names;
-- a manual LinkedIn publishing checklist.
+`thumbnail.png` is generated from a deterministic frame.
 
-V0.3 does not generate copy with AI and does not publish anything automatically.
+`metadata.json` records source/output media properties, pipeline steps, warnings and pipeline version.
 
-### V0.4 — optional local transcription
+`post.md` is deterministic UTF-8 Markdown with the asset names, a human-editable post body placeholder and a manual publishing checklist.
 
-V0.4 adds an opt-in transcription path while preserving the normal V0.3 package when the flag is omitted:
+### Optional local transcription
+
+If `whisper.cpp` and a multilingual GGML model are already installed locally:
 
 ```powershell
 screen2social process "C:\path\to\demo.mkv" --transcribe
 ```
 
-A successful transcription-enabled package contains:
+The package additionally contains:
 
 ```text
-ready/demo/
-├── linkedin.mp4
-├── thumbnail.png
-├── metadata.json
-├── post.md
-├── transcript.txt
-└── transcript.srt
+transcript.txt
+transcript.srt
 ```
 
-Transcription uses an externally installed local `whisper.cpp` `whisper-cli` executable and a local multilingual GGML model. Screen2Social does not download, install, update, or manage either resource.
+Screen2Social does not download or manage Whisper models. Transcription is opt-in, uses the local executable/model paths supplied by the operator, and does not burn subtitles into the video.
+
+---
+
+## Safety by design
+
+The pipeline is intentionally conservative:
+
+```text
+source recording != disposable input
+processing success != publishing approval
+local transcription != cloud upload
+generated post template != finished copy
+```
+
+Important behavior:
+
+- source recordings are never overwritten, edited or deleted;
+- an existing `ready/<slug>/` package is never silently replaced;
+- partial packages are cleaned up when processing fails;
+- requested transcription fails closed if the required transcript artifacts are not produced;
+- OBS authentication is configured outside the CLI;
+- the OBS endpoint defaults to local use rather than public exposure;
+- Screen2Social does not store social-network credentials;
+- Screen2Social does not auto-publish, schedule or browser-automate posts.
+
+---
 
 ## Requirements
 
-Base pipeline:
+Base workflow:
 
 - Python 3.11+
-- FFmpeg, with both `ffmpeg` and `ffprobe` available on `PATH`
+- FFmpeg with `ffmpeg` and `ffprobe` available on `PATH`
 - OBS Studio 28+ for OBS control
-- Windows is the primary local environment
 
-Optional V0.4 transcription additionally requires:
+Windows is the primary local environment used by the project.
+
+Optional transcription additionally requires:
 
 - a local `whisper.cpp` `whisper-cli` executable;
-- a local multilingual GGML Whisper model such as `ggml-base.bin`.
+- a local multilingual GGML Whisper model.
 
-No social-network API keys, cloud services, paid APIs, database, publishing credentials, or hosted transcription API are required.
+No paid API, hosted transcription service, database or backend is required.
 
-## Setup on Windows
+---
+
+## Install
 
 ```powershell
 python -m venv .venv
@@ -91,20 +149,21 @@ python -m pip install -e ".[dev]"
 screen2social doctor
 ```
 
-A healthy base media setup reports the local paths for `ffmpeg` and `ffprobe`.
+`doctor` checks the mandatory FFmpeg/ffprobe toolchain. Optional Whisper resources are only relevant when `--transcribe` is requested.
 
-`screen2social doctor` intentionally validates only mandatory FFmpeg/ffprobe dependencies. Optional Whisper configuration is checked only when `--transcribe` is requested.
+---
 
-## OBS WebSocket setup on Windows
+## OBS setup
 
-Screen2Social targets OBS Studio 28+ / obs-websocket 5.x.
+Screen2Social uses OBS WebSocket 5.x / OBS Studio 28+.
 
-1. Open OBS Studio.
-2. Open **Tools -> WebSocket Server Settings**.
-3. Enable the WebSocket server.
-4. Keep the server local; the default Screen2Social endpoint is `localhost:4455`.
-5. Enable authentication and set a password.
-6. In the same PowerShell session where you run Screen2Social, set:
+1. Open **OBS Studio → Tools → WebSocket Server Settings**.
+2. Enable the WebSocket server.
+3. Keep the endpoint local unless you have a separate reason not to.
+4. Enable authentication.
+5. Provide the OBS password through the environment used to launch Screen2Social.
+
+Example PowerShell session:
 
 ```powershell
 $env:SCREEN2SOCIAL_OBS_PASSWORD = "<your OBS WebSocket password>"
@@ -113,129 +172,96 @@ $env:SCREEN2SOCIAL_OBS_PORT = "4455"
 $env:SCREEN2SOCIAL_OBS_TIMEOUT_SECONDS = "5.0"
 ```
 
-`.env.example` is documentation only. Screen2Social does not automatically load `.env` files, and the OBS password is never accepted as a CLI argument.
+The password is not accepted as a CLI argument.
 
-### Capture flow
+A minimal recording flow is:
 
 ```powershell
 screen2social status
 screen2social record
-# record a few seconds in OBS
-screen2social status
+screen2social scene capture
+# record...
+screen2social scene studio
 screen2social stop
 ```
 
-`stop` prints:
-
-```text
-RECORDING: stopped
-FILE: C:\path\to\recording.mkv
-```
-
-Confirm that file exists, then process it separately:
+Then process the returned file explicitly:
 
 ```powershell
-Test-Path "C:\path\to\recording.mkv"
 screen2social process "C:\path\to\recording.mkv"
 ```
 
-Automatic stop-and-process chaining remains intentionally deferred.
+---
 
-## Process a recording
+## Optional transcription setup
 
-```powershell
-screen2social process "C:\path\to\demo.mkv"
-```
-
-By default the package is created under `ready/`:
-
-```text
-ready/demo/
-├── linkedin.mp4
-├── thumbnail.png
-├── metadata.json
-└── post.md
-```
-
-You can choose another output root:
-
-```powershell
-screen2social process "C:\path\to\demo.mkv" --ready-dir "C:\content\ready"
-```
-
-### Optional local transcription
-
-First install `whisper.cpp` and a multilingual GGML model independently of Screen2Social. Then point the current PowerShell session at those already-existing local resources:
+Install `whisper.cpp` and a multilingual GGML model independently, then point Screen2Social at those local resources:
 
 ```powershell
 $env:SCREEN2SOCIAL_WHISPER_CLI = "C:\tools\whisper.cpp\whisper-cli.exe"
 $env:SCREEN2SOCIAL_WHISPER_MODEL = "C:\tools\whisper.cpp\models\ggml-base.bin"
+
 screen2social process "C:\videos\demo.mkv" --transcribe
 ```
 
-V0.4 transcription behavior is deliberately narrow:
+During transcription FFmpeg prepares a temporary mono 16 kHz PCM WAV. That temporary artifact is removed before successful package completion.
 
-- transcription is opt-in; a normal `process` command never requires or inspects Whisper configuration;
-- language is fixed to `auto`;
-- `whisper-cli` generates both `transcript.txt` and `transcript.srt`;
-- FFmpeg creates a temporary mono 16 kHz PCM WAV for transcription and Screen2Social removes it before successful completion;
-- the original recording is never overwritten, edited, or deleted;
-- if transcription was explicitly requested and fails, the partial package is removed and no `READY:` result is delivered;
-- no model or executable is downloaded automatically;
-- no subtitles are burned into the video.
+---
 
-### Safety behavior
+## Architecture
 
-- The source recording is never overwritten or edited.
-- An existing `ready/<slug>/` package is never overwritten; the command fails with `OUTPUT_EXISTS`.
-- Partial output created by a failed processing run is removed.
-- Requested transcription is fail-closed: both transcript files must exist before the package is considered ready.
-- Local recordings under `inbox/` and generated assets under `ready/` are ignored by Git.
-- OBS WebSocket defaults to `localhost:4455`; Screen2Social does not configure public exposure, tunnels, or port forwarding.
-- OBS authentication is required by the configuration contract.
+```text
+OBS WebSocket
+     ↓
+local recording
+     ↓
+FFmpeg / ffprobe
+     ↓
+package builder
+ ┌───────────────┬──────────────┬───────────────┐
+ ↓               ↓              ↓               ↓
+video         thumbnail      metadata        post.md
+                                    \
+                                     └─ whisper.cpp (optional)
+                                            ↓
+                                      TXT + SRT
+```
 
-## Output preset
+The boundaries are deliberately small: OBS controls capture, FFmpeg handles media transformation, `whisper.cpp` is an optional external transcription tool, and Screen2Social coordinates the local package without owning publication.
 
-`linkedin.mp4` is rendered as:
-
-- MP4 container
-- H.264 video
-- AAC audio when the source contains audio
-- `yuv420p`
-- 1920×1080 16:9 canvas
-- original aspect ratio preserved with padding where needed
-- fast-start metadata for web playback
-
-`thumbnail.png` uses a deterministic frame: the middle of short clips, capped at five seconds for longer clips.
-
-`metadata.json` records source/output duration, dimensions, codecs, processing timestamp, pipeline steps, warnings, and pipeline version. When transcription succeeds, metadata additionally records the `transcription` step and the portable TXT/SRT artifact names, not machine-specific Whisper/model paths.
-
-`post.md` is deterministic UTF-8 Markdown intended to be edited by a human before manual publication.
-
-`transcript.txt` and `transcript.srt` are emitted by `whisper-cli` only when `--transcribe` is requested. The SRT preserves timed segments for future subtitle workflows without modifying `linkedin.mp4`.
+---
 
 ## Development
+
+Run the test suite with:
 
 ```powershell
 python -m pytest -v
 ```
 
-The media integration suite generates temporary synthetic media with FFmpeg. OBS integration tests use fake clients. Transcription tests fake the Whisper subprocess boundary and do not download or execute a real model in GitHub Actions.
+The repository includes tests for media processing, output-package contracts, OBS command boundaries and optional transcription behavior. Synthetic media fixtures are generated with FFmpeg; external OBS and Whisper behavior is isolated behind testable boundaries rather than requiring real services for every automated test.
 
-## Roadmap
+---
 
-- **V0.1** — media vertical slice: process, LinkedIn preset, thumbnail, metadata, doctor, CI ✅
-- **V0.2** — OBS WebSocket status / record / stop ✅
-- **V0.3** — `post.md` + deterministic social package ✅
-- **V0.4** — optional local TXT + SRT transcription with `whisper.cpp`
-- **V0.5+** — evaluate silence editing only after real transcription usage proves the need
-- **V1** — validated GeoPlatform → Screen2Social → manual LinkedIn workflow
-- **V1.1+** — vertical presets only after real usage proves the need
-- **V2** — evaluate Postiz before building direct social-network integrations
+## Scope
 
-## Explicitly deferred
+Screen2Social is intentionally a small local utility, not a social-media management platform.
 
-Automatic `stop -> process`, scene switching, pause/resume, streaming control, silence cutting, burned-in subtitles, translation, configurable template files, vertical presets, AI summarization/post generation, model downloading, GPU/CUDA tuning, diarization, standalone transcription commands, social APIs, browser automation, Postiz, schedulers, GUI, backend, and database remain outside V0.4.
+Currently outside the core workflow:
+
+- automatic `stop → process` chaining;
+- automatic publishing or scheduling;
+- social-network APIs;
+- browser automation;
+- AI-generated post copy;
+- automatic model downloads;
+- silence cutting or aggressive automatic editing;
+- burned-in subtitles;
+- translation or diarization;
+- GUI, backend or database;
+- multi-user account management.
+
+Future additions should earn their place through real workflow friction rather than turning the project into a generic content platform.
 
 ## License
 
